@@ -71,9 +71,8 @@ if __name__ == "__main__":
     # Load subreddits into a set for faster lookups
     with open('subreddits.txt', 'r') as f:
         subreddits = set(line.strip() for line in f)
-
-    client = pymongo.MongoClient('localhost', 27017)
-    db = client['subreddits']
+    client = pymongo.MongoClient('mongodb+srv://writer:200809@fuckrd.nswnbxy.mongodb.net/')
+    db = client['aca_subrds']
 
     try:
         batch_data = []
