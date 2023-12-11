@@ -42,8 +42,8 @@ def decompress_file(file_path):
 def process_file(file_path):
     return run_bash_script("python3", ["main.py", file_path])[0]
 
-def cleanup(directory_path):
-    run_bash_script("./cleanup.sh", [directory_path])
+def cleanup():
+    run_bash_script("./cleanup.sh")
 
 def load_state():
     try:
@@ -74,14 +74,14 @@ def main():
         else:
             print(f"Integrity check passed for file {download_path}.")
 
-        if not decompress_file(download_path):
-            logging.error(f"Decompression failed for file {download_path}.")
-            break
-        else:
-            print(f"Successfully decompressed file {download_path}.")
+        #if not decompress_file(download_path):
+        #    logging.error(f"Decompression failed for file {download_path}.")
+        #    break
+        #else:
+        #    print(f"Successfully decompressed file {download_path}.")
 
 
-        decompressed_file = download_path.rsplit('.zst', 1)[0]
+        decompressed_file = download_path
         if not process_file(decompressed_file):
             logging.error(f"Processing failed for file {decompressed_file}.")
             break
@@ -89,7 +89,7 @@ def main():
             print(f"Successfully processed file {decompressed_file}.")
 
 
-        cleanup(download_path, decompressed_file)
+        cleanup()
         print(f"Cleanup completed for index {index}.")
         state[str(index)] = "completed"
         save_state(state)
