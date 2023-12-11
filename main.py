@@ -1,8 +1,7 @@
 import json
 import sys
-
 import pymongo
-from multiprocessing import Pool, cpu_count
+
 
 # Load subreddits into a global list
 with open('subreddits.txt', 'r') as f:
@@ -61,9 +60,6 @@ def chunkify(file, chunk_size=1000):  # chunk_size is the number of lines
 
 # The main entry point of your program
 if __name__ == "__main__":
-    # Set up the multiprocessing pool
-    pool_size = max(1, cpu_count() - 1)  # You could adjust this to be less than the cpu_count
-    pool = Pool(pool_size)
 
     try:
         if len(sys.argv) < 2:
@@ -75,11 +71,7 @@ if __name__ == "__main__":
         with open(file_path, 'r') as file:
             # Loop through chunks and process them asynchronously
             for chunk in chunkify(file):
-                pool.apply_async(process_chunk, (chunk,))
-
-        # Close the pool and wait for all processes to finish
-        pool.close()
-        pool.join()
+                process_chunk(chunk)
 
     except Exception as e:
         print(f"An error occurred: {e}")
