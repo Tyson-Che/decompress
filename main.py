@@ -39,6 +39,8 @@ def insert_batch(batch_data):
                     collection.insert_one(data)
         finally:
             client.close()  # Ensure the client is closed after the batch is processed
+        except Exception as e:
+            print(f"Failed to insert data: {e}")
 
 
 #@profile
@@ -70,7 +72,7 @@ if __name__ == "__main__":
 
         file_path = sys.argv[1]
         # Open the file and process it in chunks
-        with open('file_path', 'r') as file:
+        with open(file_path, 'r') as file:
             # Loop through chunks and process them asynchronously
             for chunk in chunkify(file):
                 pool.apply_async(process_chunk, (chunk,))
