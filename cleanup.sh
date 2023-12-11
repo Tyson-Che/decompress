@@ -1,3 +1,3 @@
 #!/bin/bash
-directory_path=$1
-rm -rf "$directory_path"
+rm -r reddit
+rm reddit.aria2
