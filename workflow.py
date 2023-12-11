@@ -1,4 +1,5 @@
 import subprocess
+import os
 import logging
 import re
 import json
@@ -26,6 +27,7 @@ def download_file(index):
         # Finding the file path after the last '|' character
         match = re.search(r'\|\s*(/.*?\.zst)\s*$', results_section, re.MULTILINE)
         if match:
+            print(f"Successfully downloaded file for index {index}.")
             return True, match.group(1)
     return False, None
 
@@ -40,8 +42,8 @@ def decompress_file(file_path):
 def process_file(file_path):
     return run_bash_script("python3", ["main.py", file_path])[0]
 
-def cleanup(download_path):
-    run_bash_script("./cleanup.sh", [download_path])
+def cleanup(directory_path):
+    run_bash_script("./cleanup.sh", [directory_path])
 
 def load_state():
     try:
@@ -69,17 +71,26 @@ def main():
         if not check_integrity(download_path):
             logging.error(f"Integrity check failed for file {download_path}.")
             break
+        else:
+            print(f"Integrity check passed for file {download_path}.")
 
         if not decompress_file(download_path):
             logging.error(f"Decompression failed for file {download_path}.")
             break
+        else:
+            print(f"Successfully decompressed file {download_path}.")
+
 
         decompressed_file = download_path.rsplit('.zst', 1)[0]
         if not process_file(decompressed_file):
             logging.error(f"Processing failed for file {decompressed_file}.")
             break
+        else:
+            print(f"Successfully processed file {decompressed_file}.")
+
 
         cleanup(download_path, decompressed_file)
+        print(f"Cleanup completed for index {index}.")
         state[str(index)] = "completed"
         save_state(state)
 
