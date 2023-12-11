@@ -1,80 +1,101 @@
-import json
-import sys
+import zstandard
 import pymongo
+import json
+import os
+import sys
+import logging.handlers
+
+# Set up logging
+log = logging.getLogger("bot")
+log.setLevel(logging.DEBUG)
+log.addHandler(logging.StreamHandler())
+
+def read_and_decode(reader, chunk_size, max_window_size, previous_chunk=None, bytes_read=0):
+	chunk = reader.read(chunk_size)
+	bytes_read += chunk_size
+	if previous_chunk is not None:
+		chunk = previous_chunk + chunk
+	try:
+		return chunk.decode()
+	except UnicodeDecodeError:
+		if bytes_read > max_window_size:
+			raise UnicodeError(f"Unable to decode frame after reading {bytes_read:,} bytes")
+		log.info(f"Decoding error with {bytes_read:,} bytes, reading another chunk")
+		return read_and_decode(reader, chunk_size, max_window_size, chunk, bytes_read)
 
 
-# Load subreddits into a global list
-with open('subreddits.txt', 'r') as f:
-    subreddits = [line.strip() for line in f]
+def read_lines_zst(file_name):
+	with open(file_name, 'rb') as file_handle:
+		buffer = ''
+		reader = zstandard.ZstdDecompressor(max_window_size=2**31).stream_reader(file_handle)
+		while True:
+			chunk = read_and_decode(reader, 2**27, (2**29) * 2)
 
-#@profile
+			if not chunk:
+				break
+			lines = (buffer + chunk).split("\n")
+
+			for line in lines[:-1]:
+				yield line, file_handle.tell()
+
+			buffer = lines[-1]
+
+		reader.close()
 def process_line(line):
     try:
         json_data = json.loads(line)
-
-        # Check if subreddit is in the list
         subreddit = json_data.get('subreddit')
         if subreddit not in subreddits:
             return None
-
-        # Modify 'id' to '_id'
         json_data['_id'] = json_data.pop('id', None)
         return subreddit, json_data
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as err:
+        log.error(f"JSON decode error: {err}")
         return None
 
+def insert_batch(batch_data, db):
+    for subreddit, data in batch_data:
+        if data:
+            collection = db[subreddit]
+            try:
+                collection.insert_one(data)
+            except Exception as e:
+                log.error(f"Error inserting into database: {e}")
 
-
-#@profile
-def insert_batch(batch_data):
-    if batch_data:
-        # Create a new client for each batch within the process
-        client = pymongo.MongoClient('mongodb+srv://writer:200809@fuckrd.nswnbxy.mongodb.net/')
-        db = client['aca_sub_rd']
-        try:
-            for subreddit, data in batch_data:
-                if data:  # Check if data is not None
-                    collection = db[subreddit]
-                    collection.insert_one(data)
-        finally:
-            client.close()  # Ensure the client is closed after the batch is processed
-        except Exception as e:
-            print(f"Failed to insert data: {e}")
-
-
-#@profile
-def process_chunk(chunk):
-    processed_data = [process_line(line) for line in chunk if process_line(line) is not None]
-    insert_batch(processed_data)
-#@profile
-def chunkify(file, chunk_size=1000):  # chunk_size is the number of lines
-    chunk = []
-    for line in file:
-        chunk.append(line)
-        if len(chunk) >= chunk_size:
-            yield chunk
-            chunk = []
-    if chunk:  # yield the last chunk if it has any lines
-        yield chunk
-
-
-# The main entry point of your program
 if __name__ == "__main__":
+    file_path = sys.argv[1]
+    file_size = os.stat(file_path).st_size
+    file_lines = 0
+    bad_lines = 0
+
+    # Load subreddits into a set for faster lookups
+    with open('subreddits.txt', 'r') as f:
+        subreddits = set(line.strip() for line in f)
+
+    client = pymongo.MongoClient('localhost', 27017)
+    db = client['subreddits']
 
     try:
-        if len(sys.argv) < 2:
-            print("Usage: python3 main.py <file_path>")
-            sys.exit(1)
+        batch_data = []
+        for line, file_bytes_processed in read_lines_zst(file_path):
+            processed = process_line(line)
+            if processed:
+                batch_data.append(processed)
+                if len(batch_data) >= 1000:  # Adjust batch size as needed
+                    insert_batch(batch_data, db)
+                    batch_data = []
+            
+            file_lines += 1
+            if file_lines % 100000 == 0:
+                progress = (file_bytes_processed / file_size) * 100
+                log.info(f"Processed {file_lines:,} lines. Bad lines: {bad_lines:,}. Progress: {progress:.2f}%")
 
-        file_path = sys.argv[1]
-        # Open the file and process it in chunks
-        with open(file_path, 'r') as file:
-            # Loop through chunks and process them asynchronously
-            for chunk in chunkify(file):
-                process_chunk(chunk)
+        # Insert any remaining data
+        if batch_data:
+            insert_batch(batch_data, db)
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        log.error(f"An error occurred: {e}")
     finally:
-        # No need to close the client here as each process initializes its own
-        pass
+        client.close()
+        log.info(f"Complete: Processed {file_lines:,} lines with {bad_lines:,} bad lines.")
