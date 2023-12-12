@@ -1,3 +1,4 @@
 #!/bin/bash
-rm -r reddit
-rm reddit.aria2
+rm -rf reddit
+rm -f reddit.aria2
+
