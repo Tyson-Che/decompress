@@ -5,8 +5,8 @@ import re
 import json
 
 # Constants
-START_INDEX = 391
-END_INDEX = 434
+START_INDEX = 393
+END_INDEX = 410
 TORRENT_FILE = "89d24ff9d5fbc1efcdaf9d7689d72b7548f699fc.torrent"
 STATE_FILE = "state.json"
 
@@ -43,8 +43,7 @@ def process_file(file_path):
     return run_bash_script("python3", ["main.py", file_path])[0]
 
 def cleanup():
-    run_bash_script("./cleanup.sh")
-
+    subprocess.run(["./cleanup.sh"], capture_output=True, text=True)
 def load_state():
     try:
         with open(STATE_FILE, "r") as file:
